@@ -1,0 +1,102 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+autonumber
+
+actor 用户
+
+participant 客户端
+
+participant srv
+
+participant antiaddictsrv
+
+database 缓存
+
+database 数据库
+
+
+用户 --> 客户端: 用户进入房间
+
+activate 客户端
+客户端-->srv:看情况解决srv服务，\n金币场为coinsrv\n组剧场为gamedispatchsrv\n竞技赛场服务为clubmgrsrv
+
+activate srv
+
+alt 客户端传递user_certified_type为on
+
+    srv-->srv:创建桌子并且加入桌子
+    srv-->客户端:返回消息
+|||
+else 客户端传递user_certified_type为off
+
+    activate antiaddictsrv
+
+    srv-->antiaddictsrv:请求是否非防沉迷
+    antiaddictsrv-->缓存:获取后台开关
+    activate 缓存
+    缓存-->antiaddictsrv:返回结果
+    deactivate 缓存
+    antiaddictsrv-->antiaddictsrv:检查强制后台开关是否开启
+    |||
+    alt 后台强制实名开关关闭
+        |||
+        antiaddictsrv-->srv:用户不被防沉迷
+        |||
+    else 后台强制实名开关开启
+        |||
+        antiaddictsrv-->缓存:获取玩家身份证信息\nantiaddict:certification:$game_id:$user_id
+        缓存-->antiaddictsrv:返回玩家身份证信息
+        activate 缓存
+        alt 缓存不命中
+            |||
+            antiaddictsrv-->数据库:查询玩家信息\n pi_user_id表
+            activate 数据库
+            数据库-->antiaddictsrv:返回数据
+            deactivate 数据库
+            antiaddictsrv-->缓存:保存玩家数据
+            deactivate 缓存
+            |||
+        end
+        antiaddictsrv-->antiaddictsrv:检查用户是否实名
+        |||
+        alt 用户已实名并且已满18周岁
+            |||
+            antiaddictsrv-->srv:用户不被防沉迷
+            |||
+        else 用户已实名但未满18周岁 用户未实名
+            antiaddictsrv-->srv:用户被防沉迷
+            |||
+        else
+             alt 用户当前时长满1.5小时
+                |||
+                antiaddictsrv-->srv:用户被防沉迷
+                |||
+            else 用户当前时不满1.5小时
+                |||
+                antiaddictsrv-->srv:用户不被防沉迷
+                |||
+            end
+        end
+    end
+   deactivate antiaddictsrv
+end
+
+ alt 用户被防沉迷
+    |||
+    srv-->客户端:返回错误消息并通知被防沉迷
+    |||
+    客户端-->客户端:判断被防沉迷时间是否大于24小时\n如果大于24小时则为未实名。\n小余24小时则为未成年
+    |||
+else 用户不被防沉迷
+    |||
+    srv-->客户端:创建桌子并且加入桌子
+    客户端-->客户端:走加入桌子流程
+    |||
+end
+
+deactivate srv
+客户端 --> 用户:弹出提示
+deactivate 客户端
+
+@enduml

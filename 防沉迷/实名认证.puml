@@ -1,0 +1,19 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+autonumber
+
+actor user
+participant antiaddictapisrv
+database cache
+database db
+participant antiaddictsrv
+
+
+user-->antiaddictapisrv:玩家提交实名认证信息
+activate antiaddictapisrv
+
+deactivate antiaddictapisrv
+
+
+@enduml
