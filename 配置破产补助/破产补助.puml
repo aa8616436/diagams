@@ -1,0 +1,63 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+autonumber
+participant 后台
+participant configapisrv
+participant coinplaceapisrv
+database redis
+database coindb
+
+后台 -> coinplaceapisrv: 保存破产补助配置信息
+coinplaceapisrv -> coindb: 将破产补助配置数据发送给数据库
+coinplaceapisrv <-- coindb: 返回
+coinplaceapisrv -> redis: 将数据缓存到redis，设置过期时间30秒
+coinplaceapisrv <-- redis: 返回
+后台 <-- coinplaceapisrv: 返回
+
+newpage
+
+autonumber
+后台 -> coinplaceapisrv: 查询某平台的破产配置信息
+coinplaceapisrv -> coindb: 查询数据库
+alt 查询成功
+coinplaceapisrv <-- coindb: 返回数据
+coinplaceapisrv -> redis: 将数据缓存到redis，设置过期时间30秒
+coinplaceapisrv <-- redis: 返回
+后台 <-- coinplaceapisrv: 返回数据
+else 数据库中没有数据
+coinplaceapisrv <-- coindb: 没有数据错误
+后台 <-- coinplaceapisrv: 返回空数据
+end
+
+newpage
+
+autonumber
+group 更新某平台的破产补助信息
+后台 -> coinplaceapisrv: 更新某平台的破产补助信息
+coinplaceapisrv -> redis: 将该平台的破产补助信息从redis删除
+coinplaceapisrv <-- redis: 返回
+coinplaceapisrv -> coindb: 更新某平台的破产补助信息
+coinplaceapisrv <-- coindb: 返回
+后台 <-- coinplaceapisrv: 返回
+end
+
+newpage
+
+autonumber
+group 批量拷贝配置信息
+后台 -> configapisrv: 发送批量拷贝配置信息
+configapisrv -> coinplaceapisrv:批量拷贝原平台的破产配置信息到多个目标平台
+coinplaceapisrv -> coindb: 查询原平台的破产补助信息
+coinplaceapisrv <-- coindb: 返回数据
+coinplaceapisrv -> redis: 批量删除目标平台的破产补助配置缓存
+coinplaceapisrv <-- redis: 返回
+coinplaceapisrv -> coindb: 批量删除数据库中目标平台的破产补助配置
+coinplaceapisrv <-- coindb: 返回
+coinplaceapisrv -> coindb: 将原平台配置批量拷贝到多个目标平台
+coinplaceapisrv <-- coindb: 返回
+configapisrv <-- coinplaceapisrv: 返回
+后台 <-- configapisrv: 返回拷贝成功
+end
+
+@enduml
