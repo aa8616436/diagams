@@ -1,1 +1,3 @@
-module "zonst/qipai/api/diagams"
+module zonst/qipai/api/diagams
+
+go 1.12
