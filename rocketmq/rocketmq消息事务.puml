@@ -1,0 +1,47 @@
+@startuml
+'https://plantuml.com/activity-diagram-beta
+start
+: 发送half消息到rocketmq;
+note right
+    发送消息失败，有几种可能性
+    1、消息发送成功，但是接受者内部把这条消息丢了(发送者认为mq有half，其实没有，导致不一致)
+    2、消息发送过去成功，但是返回超时，这里又分为两种情况，接受者接收到了消息和没接收消息(发送者认为mq没有half消息，但是mq可能有，导致不一致)
+    3、网络是断开的消息根本就没发送出去（没有不一致)
+
+    上面几种失败的情况，怎么保证消息的一致性的？
+    1、当消息发送者处理完本地操作之后，发送commit消息或者rollback消息给mq时，mq一定是返回失败给发送方
+    2、mq会一直询问发送方这条消息的状态，来判断这条消息的状态。
+    只有接受者有half消息，并且要求发送者发送commit并且消息接受者接收到commit消息，这条消息才算发送成功。
+    只要有一方认为失败，这次消息就一定失败。
+end note
+if (是否成功？) then (yes)
+    :消息发送者处理本地后续操作;
+    if (是否成功？) then (yes)
+        : 发送commit消息到rocketmq;
+        if (是否成功？) then (yes)
+            : rocketmq对half消息进行commit;
+        else (no)
+            : rocketmq询问发送方half状态消息的状态;
+             while (询问成功？) is (失败)
+                :继续询问;
+             endwhile (成功)
+                :设置消息的状态;
+        endif
+    else (no)
+        : 发送rollback消息到rocketmq;
+        if (是否成功？) then (yes)
+            : rocketmq对half消息进行rollback;
+        else (no)
+             : rocketmq询问发送方half状态消息的状态;
+             while (询问成功？) is (失败)
+                :继续询问;
+             endwhile (成功)
+                :设置消息的状态;
+        endif
+    endif
+else (no)
+    : 返回发送消息失败;
+endif
+stop
+
+@enduml

@@ -1,0 +1,1 @@
+module "zonst/qipai/api/diagams"
