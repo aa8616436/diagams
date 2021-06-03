@@ -1,0 +1,98 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+actor "前端" as User
+control "GetTimeAwardProcAndConfig" as controller
+participant "GetTimeAwardProcAndConfig" as service
+participant "GetTimeAwardConfigs" as configsDao
+entity "TimeAwardconfig" as config
+participant "GetTimeAwardUserProcesses" as processesDao
+entity "TimeAwardUserProcess" as  process
+database "L2 cache" as cache
+database "redis" as redis
+database "postgre" as db
+
+User -> controller ++ : POST \n /time-award-GetTimeAwardProcAndConfig/
+note right
+1. 通过: pl,e:= authMiddleware.GetClientPayload(c) 获取 加密信息
+2. 创建缓存
+end note
+
+controller -> service ++ : pl.GameId,pl.UserId,pl.AppChannel,conn
+note right
+不要相信前面传来的任何数据
+1.创建结构体
+2.防止缓存为空
+end note
+
+group 获取配置
+    service -> configsDao ++ : gameId,appChannel,conn
+    note right
+    engine = DB().Model().Where()
+    end note
+
+    configsDao -> config ++ : tac.ArrayMustGet(conn,engine)
+
+    config -> cache ++ : if ArrayTimeAwardConfigCacheSwitch == true \n ArrayGetFromCache
+    config <-- cache : if cache != nil
+
+    config <-- cache --++ : if cache == nil
+
+    config -> redis ++ : ArrayGetFromRedis
+    config <-- redis : if redis != nil
+
+    config <-- redis --++ : if redis == redis.ErrNil
+
+    config -> db ++ : Count
+    config <-- db : if Count == 0 Find Nothing
+    config -> redis : SET key "DISABLE" NX (NX:key不存在才能设置成功) or \nSET key "DISABLE" EX time NX
+    note right
+    防止缓存穿透
+    end note
+    config -> cache -- : ArraySyncToCache
+
+    config <-- db --++ : if Count >0 Find Success
+    config -> redis : ArraySyncToRedis
+    config -> cache -- : ArraySyncToCache
+
+    configsDao <- config -- : get arrayConfig
+    deactivate
+    service <- configsDao -- : get arrayConfig
+end
+
+group 获取用户信息
+    '从dao层获取用户信息
+    service -> processesDao ++ : gameId,userId,appChannel,conn
+    note right
+    1.需要判断下 appChannel 是否为空,default "vx"
+    end note
+    '从model层获取用户信息
+    processesDao -> process ++ : taup.ArrayMustGet(conn,engine)
+
+    'process不开启二级缓存
+    process -> redis ++ : ArrayGetFromRedis(conn)
+    process <-- redis : if redis != nil
+
+    '缓存中不存在key,同时db中不存在数据，设置 redis DISABLE 防止缓存穿透
+    process <-- redis--++ : if redis == redis.ErrNil
+    process -> db ++ : engine.Count
+    process <-- db : if Count == 0
+    process -> redis : SET key DISABLE NX \nSET key DISABLE EX time NX
+
+    '缓存中不存在key,但是db中存在key
+    process <-- db --  : if Count > 0
+    process -> redis --  : ArraySyncToRedis
+
+    processesDao <- process --++ : get arrayProcess
+    processesDao -> processesDao : if not found in redis nor db \ntaup.Init() \n db.Create() \n (因为数据中没有，可能是新用户,需要对数据进行初始化并存入数据)
+    processesDao -> processesDao : if !util.ValidSameDay \nupdate vstate
+
+    service <- processesDao -- : get arrayProcess
+    deactivate
+end
+
+service -> service : 拼装 configs 和 processes
+
+controller <- service -- : 拉取进度和配置
+User <- controller : 返回对应数据
+@enduml
