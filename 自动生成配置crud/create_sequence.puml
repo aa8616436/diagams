@@ -1,0 +1,23 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+autonumber
+
+actor "前端" as user
+participant "HTTPAddTimeAwardConfig" as controller
+database "redis" as redis
+database "postgre" as db
+
+user -> controller ++ : POST time-award-config
+
+controller -> db : db.Create() != nil
+
+controller -> redis : param.DeleteFromRedis(conn)
+note right of controller
+1.在之前我们如果设置过: SET key DISABLE
+2.目的是为了防止缓存穿透
+end note
+
+user <- controller : http.StatusOk :200
+
+@enduml

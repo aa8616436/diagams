@@ -1,0 +1,28 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+autonumber
+
+actor "前端" as user
+participant "HTTPGetTimeAwardConfig" as controller
+database "redis" as redis
+database "postgre" as db
+
+user -> controller ++ : GET /time-award-config/:id/
+note right user
+/:id/ 为 API参数
+使用 c.Param("id") 绑定
+end note
+
+controller -> controller :  c.Param("id) \n strconv.Atoi(id)
+controller -> db ++ : db.Count(&count)
+controller <-- db : count == nil
+
+controller <-- db ++ : count !=nil
+controller -> db : db.First()
+controller <- db -- : find success
+deactivate controller
+
+user <- controller -- : http.StatusOk:200 \n data
+
+@enduml

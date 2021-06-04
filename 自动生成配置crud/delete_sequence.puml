@@ -1,0 +1,24 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+autonumber
+
+actor "前端" as user
+participant "HTTPDeleteTimeAwardConfig" as controller
+database "redis" as redis
+database "postgre" as db
+
+user -> controller ++ : DELETE /time-award-config/:id/
+
+controller -> db ++ : db.Count()
+controller <-- db : if count == 0
+
+controller <-- db ++ : if count != 0
+controller -> db : db.First()
+controller -> db -- : db.Delete()
+deactivate
+
+controller -> redis : if key != "" \n deleteFromRedis(conn)
+user <- controller : http.StatusOk: 200 success
+
+@enduml

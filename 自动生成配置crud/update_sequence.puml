@@ -1,0 +1,41 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+autonumber
+
+actor "前端" as user
+participant "HTTPUpdateTimeAwardConfig" as controller
+database "redis" as redis
+database "postgre" as db
+
+user -> controller ++ : PATCH /time-award-config/:id/
+note right
+所有crud 对单个数据进行操作时
+都需要依照以下顺序
+1.count 查看是否有数据
+2.first 绑定数据 (用first的原因是防止有多个数据)
+3.对数据进行操作
+end note
+
+controller -> db ++ : db.Count(&count)
+controller <-- db : count == 0
+
+controller <-- db ++ : count != 0
+controller -> db : db.First(&struct)
+
+controller -> db ++ : db.Begin \n db.Updates
+controller <-- db   : if err \n db.Rollback()
+controller -> db -- : db.Commit()
+deactivate db
+deactivate
+
+controller -> redis : if key != nil \n deleteFromRedis(conn)
+note right controller
+为什么不先从缓存中获取，反而要删除缓存？
+配置操作不会有很多操作, 一般是人工操作
+可以保证数据的一致性
+end note
+user <- controller -- : http.statusok:200 success
+
+
+@enduml

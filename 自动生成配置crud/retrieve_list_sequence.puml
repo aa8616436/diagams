@@ -1,0 +1,36 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+
+autonumber
+actor "前端" as user
+participant "HTTPListTimeAwardConfig" as controller
+database "redis" as redis
+database "postgre" as db
+
+user ->controller ++ : GET /time-award-config/
+note right user
+# API参数 /:test/ c.Param("id")
+# url参数 /?id=1  c.DefaultQuery("id","")
+该方法中使用 url参数
+end note
+
+controller -> controller
+note right
+该方法中url参数可以有
+created_at_start , created_at_end : time.ParseInLocation
+updatedAtStartTimeStr,updatedAtEndTimeStr
+
+game_id
+user_id
+...
+
+page default 1
+size default 20
+orderby
+end note
+
+controller -> db ++ : db.Find()
+controller <- db -- : find success
+
+user <- controller -- : http.StatusOk:200 ,data
+@enduml
